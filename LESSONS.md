@@ -93,6 +93,31 @@ is **MP3, mono, 44.1kHz** — workers globbing `*.wav` find nothing.
 injection) — do NOT pip-install them; but `descript-audiotools` IS required and
 is on PyPI under that name, not `audiotools`.
 
+## The June rebuild: nightly wheels are a depreciating asset
+
+Rebuilding this image one month after the original install failed twice from
+the same root cause: **"install from the nightly index" instructions have a
+shelf life measured in weeks.**
+
+- xformers stopped publishing cu130 nightlies (Dec 2025), so the May
+  instruction "xformers from the nightly index" became unbuildable —
+  `ResolutionImpossible`, no wheel matches any current torch nightly.
+- Putting torch+xformers in one pip invocation (the textbook fix) *also*
+  failed: the resolver couldn't bridge a 6-month gap between the two packages'
+  newest nightlies.
+- The actual fix: the *running* container had quietly ended up on **stable
+  torch 2.8.0**, which by June fully supported Blackwell (SM_120) — the entire
+  reason for nightlies had expired — and every pipeline had been validated
+  against it in daily use. So we pinned the proven stable set
+  (`torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 xformers`) and saved a
+  `pip freeze` of the working container next to the Dockerfile as ground truth.
+
+Corollary confirmed the hard way: **runtime `docker exec pip install` rots.**
+A container recreation silently dropped `sentencepiece`/`pydub` (broke YuE) and
+xformers (broke Hallo2's tier) weeks after install. If a dependency matters, it
+lives in the Dockerfile — verified here by rebuilding and running a YuE song
+job on a fresh container with zero manual installs.
+
 ## Meta-lessons
 
 1. **Entry points lie.** Three of five model repos had a different real entry

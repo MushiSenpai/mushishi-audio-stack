@@ -13,10 +13,15 @@ RUN apt update && apt install -y \
     libegl1 \
     && rm -rf /var/lib/apt/lists/*
 
-# PyTorch nightly cu130 — required for RTX 5090 SM_120 (same as vLLM container in main stack)
+# PyTorch STABLE, pinned (2026-06-10 — was nightly cu130).
+# History: May 2026 required nightly for RTX 5090 SM_120. By June 2026 the
+# as-run worker container had drifted to STABLE torch 2.8.0 (PyPI CUDA build,
+# nccl-cu13) and every pipeline was validated against it in production use.
+# Meanwhile xformers stopped publishing cu130 nightlies (Dec 2025), making the
+# old nightly layer unbuildable (ResolutionImpossible). So: pin the PROVEN set.
+# xformers in the same invocation — pip resolves the release matching torch 2.8.0.
 RUN pip3 install --no-cache-dir --break-system-packages \
-    --pre torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/nightly/cu130
+    torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 xformers
 
 # Core audio dependencies
 RUN pip3 install --no-cache-dir --break-system-packages \
@@ -72,16 +77,11 @@ RUN ln -sf /usr/lib/x86_64-linux-gnu/libGLESv2_nvidia.so.2 \
            /usr/lib/x86_64-linux-gnu/libGLESv2.so.2 && ldconfig
 
 # Hallo2 cinematic lip sync deps (Phase B.2)
-# xformers MUST install from the same nightly cu130 index as torch — PyPI xformers
-# pulls in stable torch 2.12.0 which has NCCL ABI mismatch with the CUDA 12.8 base image.
+# xformers now installed alongside torch in the first pip layer (see note there).
 # audio-separator: Kim_Vocal_2.onnx vocal separator required by Hallo2 audio processor.
-# nvidia-nccl-cu12 force-upgrade: torch nightly 2.13+ requires ncclCommResume (NCCL 2.30+).
-RUN pip3 install --no-cache-dir --break-system-packages \
-    --pre xformers \
-    --index-url https://download.pytorch.org/whl/nightly/cu130
+# (nvidia-nccl-cu12 force-upgrade REMOVED 2026-06-10: that was a torch-nightly
+#  ABI fix; stable torch 2.8.0 ships a consistent nccl dep set already.)
 RUN pip3 install --no-cache-dir --break-system-packages \
     audio-separator
-RUN pip3 install --no-cache-dir --break-system-packages \
-    --upgrade nvidia-nccl-cu12
 
 WORKDIR /app
