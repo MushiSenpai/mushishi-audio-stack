@@ -1,0 +1,87 @@
+FROM nvidia/cuda:12.8.0-devel-ubuntu24.04
+# NOTE: Use 12.8 base, not 13.2 — PyTorch nightly cu130 is compatible
+# and more widely tested at this base image version.
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TORCH_HOME=/data/ai/07-cache/torch
+
+RUN apt update && apt install -y \
+    python3 python3-pip python3-venv \
+    git wget curl ffmpeg \
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev \
+    libsndfile1 libportaudio2 libasound2-dev \
+    libegl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# PyTorch nightly cu130 — required for RTX 5090 SM_120 (same as vLLM container in main stack)
+RUN pip3 install --no-cache-dir --break-system-packages \
+    --pre torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/nightly/cu130
+
+# Core audio dependencies
+RUN pip3 install --no-cache-dir --break-system-packages \
+    fastapi uvicorn python-multipart \
+    redis rq \
+    whisperx \
+    faster-whisper \
+    demucs \
+    soundfile librosa audioread \
+    requests httpx
+
+# LatentSync and general lipsync inference deps
+# opencv-python pinned version has NumPy 1.x ABI — use headless + unpinned for NumPy 2.x compat
+RUN pip3 install --no-cache-dir --break-system-packages \
+    "diffusers>=0.32.0" \
+    "accelerate>=0.26.0" \
+    "opencv-python-headless>=4.10.0" \
+    "mediapipe>=0.10.11" \
+    "python_speech_features==0.6" \
+    "scenedetect>=0.6.1" \
+    "ffmpeg-python==0.2.0" \
+    "imageio>=2.31.1" \
+    "imageio-ffmpeg>=0.5.0" \
+    "lpips==0.1.4" \
+    "face-alignment==1.4.1" \
+    "kornia>=0.8.0" \
+    "insightface==0.7.3" \
+    "onnxruntime-gpu>=1.21.0" \
+    "DeepCache==0.1.1" \
+    "moviepy==1.0.3" \
+    "decord==0.6.0" \
+    "einops>=0.7.0"
+
+# YuE + Hallo2 additional deps
+# NOTE: vocos/descriptaudiocodec are bundled in xcodec_mini_infer — no external install needed for those.
+# descript-audiotools provides the `audiotools` module required by bundled descriptaudiocodec.
+# sentencepiece required by YuE LLaMA tokenizer.
+# pydub required by YuE audio processing.
+RUN pip3 install --no-cache-dir --break-system-packages \
+    pydub \
+    omegaconf \
+    icecream \
+    "transformers>=4.40.0" \
+    "sentencepiece>=0.1.99" \
+    tensorboard \
+    scipy \
+    "safetensors>=0.4.0" \
+    descript-audiotools
+
+# libGLESv2 symlink — mediapipe face landmarker (used by Hallo2) needs libGLESv2.so.2
+# CUDA base image ships only libGLESv2_nvidia.so.2; symlink bridges the naming gap.
+RUN ln -sf /usr/lib/x86_64-linux-gnu/libGLESv2_nvidia.so.2 \
+           /usr/lib/x86_64-linux-gnu/libGLESv2.so.2 && ldconfig
+
+# Hallo2 cinematic lip sync deps (Phase B.2)
+# xformers MUST install from the same nightly cu130 index as torch — PyPI xformers
+# pulls in stable torch 2.12.0 which has NCCL ABI mismatch with the CUDA 12.8 base image.
+# audio-separator: Kim_Vocal_2.onnx vocal separator required by Hallo2 audio processor.
+# nvidia-nccl-cu12 force-upgrade: torch nightly 2.13+ requires ncclCommResume (NCCL 2.30+).
+RUN pip3 install --no-cache-dir --break-system-packages \
+    --pre xformers \
+    --index-url https://download.pytorch.org/whl/nightly/cu130
+RUN pip3 install --no-cache-dir --break-system-packages \
+    audio-separator
+RUN pip3 install --no-cache-dir --break-system-packages \
+    --upgrade nvidia-nccl-cu12
+
+WORKDIR /app

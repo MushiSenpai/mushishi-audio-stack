@@ -1,0 +1,150 @@
+services:
+
+  # ── Infrastructure ─────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: creative-redis
+    ports:
+      - "127.0.0.1:6379:6379"     # internal only — no external exposure
+    volumes:
+      - /data/ai/07-cache/redis:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+  rq-dashboard:
+    image: eoranged/rq-dashboard
+    container_name: creative-rq-dashboard
+    ports:
+      - "9010:9181"               # Tailscale-exposed — UFW rule required
+    environment:
+      - RQ_DASHBOARD_REDIS_URL=redis://creative-redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # ── Audio Gateway API ───────────────────────────────────────────────
+  audio-gateway:
+    image: mushishi-audio-base
+    container_name: creative-audio-gateway
+    ports:
+      - "9000:9000"               # Tailscale-exposed — UFW rule required
+    volumes:
+      - /data/ai/01-workspace/audio/gateway:/app
+      - /data/ai/03-data/audio:/data/ai/03-data/audio
+      - /data/ai/08-portfolio/outputs/audio:/outputs
+    environment:
+      - REDIS_URL=redis://creative-redis:6379
+    depends_on:
+      - redis
+    command: uvicorn main:app --host 0.0.0.0 --port 9000 --reload
+    restart: unless-stopped
+
+  # ── RQ Job Worker ──────────────────────────────────────────────────
+  audio-worker:
+    image: mushishi-audio-base
+    container_name: creative-audio-worker
+    runtime: nvidia
+    volumes:
+      - /data/ai/01-workspace/audio/gateway:/app
+      - /data/ai/01-workspace/audio/museTalk:/data/ai/01-workspace/audio/museTalk
+      - /data/ai/01-workspace/audio/latentsync:/data/ai/01-workspace/audio/latentsync
+      - /data/ai/01-workspace/audio/hallo2:/data/ai/01-workspace/audio/hallo2
+      - /data/ai/01-workspace/audio/yue:/data/ai/01-workspace/audio/yue
+      - /data/ai/02-models/audio:/data/ai/02-models/audio:ro
+      - /data/ai/02-models/audio/voices:/data/ai/02-models/audio/voices
+      - /data/ai/03-data/audio:/data/ai/03-data/audio
+      - /data/ai/08-portfolio/outputs/audio:/data/ai/08-portfolio/outputs/audio
+      - /data/ai/07-cache/torch:/data/ai/07-cache/torch
+    working_dir: /app
+    extra_hosts:
+      - "host.docker.internal:172.23.0.1"
+    environment:
+      - REDIS_URL=redis://creative-redis:6379
+      - TORCH_HOME=/data/ai/07-cache/torch
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    depends_on:
+      - redis
+      - fish-speech
+    command: rq worker --url redis://creative-redis:6379 stt voice lipsync music dub
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # ── TTS + Voice Cloning ─────────────────────────────────────────────
+  fish-speech:
+    image: mushishi-audio-base
+    container_name: creative-tts
+    runtime: nvidia
+    ports:
+      - "127.0.0.1:9002:9002"    # internal only
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      - /data/ai/02-models/audio/fish-speech:/models:ro
+      - /data/ai/02-models/audio/voices:/voices
+      - /data/ai/08-portfolio/outputs/audio/voiceover:/outputs
+      - /data/ai/01-workspace/audio/fish-speech:/app
+    working_dir: /app
+    command: bash /app/start-api.sh
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # ── Lip Sync (multi-tier) ───────────────────────────────────────────
+  lipsync:
+    image: mushishi-audio-base
+    container_name: creative-lipsync
+    runtime: nvidia
+    ports:
+      - "127.0.0.1:9003:9003"    # internal only
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      - /data/ai/02-models/audio:/models:ro
+      - /data/ai/01-workspace/audio:/workspace:ro
+      - /data/ai/03-data/audio:/audio-data
+      - /data/ai/08-portfolio/outputs/audio/lip-sync:/outputs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # ── Music Generation (multi-model) ─────────────────────────────────
+  music:
+    image: mushishi-audio-base
+    container_name: creative-music
+    runtime: nvidia
+    ports:
+      - "127.0.0.1:9004:9004"    # internal only
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      - /data/ai/02-models/audio:/models:ro
+      - /data/ai/01-workspace/audio:/workspace:ro
+      - /data/ai/08-portfolio/outputs/audio/music:/outputs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
