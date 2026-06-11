@@ -11,7 +11,7 @@ over padding — this table fills in public).
 | Lipsync draft | MuseTalk | portrait + 10s audio | MP4 | | | |
 | Lipsync production | LatentSync | 626×732 portrait + 9.4s audio | H.264 MP4 | | | first verified output 2026-05-24 |
 | Lipsync cinematic | Hallo2 | 512×512 portrait + 9.4s audio | H.264 MP4 | | | first verified output 2026-05-24 |
-| Music (song) | YuE 7B | genre + lyrics, 2 segments | 60s MP3 (mono 44.1kHz) | | ~16GB | mono is a YuE vocoder limit |
+| Music (song) | YuE 7B | genre + lyrics, 2 short segments | 15s MP3 (mono 44.1kHz, 64kbps) | **2m 56s** | ~16GB | 2026-06-10, fresh rebuilt container, zero manual installs; mono is a YuE vocoder limit |
 | Transcribe | Whisper V3 Turbo + WhisperX | 60s speech video | JSON + word timings | | ~2GB | |
 | Dub (video-locked) | full pipeline | 60s EN video → ES | dubbed MP4 + SRT | | | |
 
