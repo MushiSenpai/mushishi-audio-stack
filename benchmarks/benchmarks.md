@@ -4,6 +4,10 @@ Measured on: RTX 5090 32GB · Ryzen 9 9900X3D · 128GB DDR5 · Ubuntu 24.04.
 Updated weekly as runs are recorded. Empty cells = not yet measured (honesty
 over padding — this table fills in public).
 
+Machine-readable version (same numbers, full schema incl. throughput/cost):
+[`audio-benchmarks.csv`](audio-benchmarks.csv) — this is what the public
+[workflow catalogue](https://theinvalid.me/workflow-catalogue) is generated from.
+
 | Pipeline | Model/tier | Input | Output | Wall clock | Peak VRAM | Notes |
 |---|---|---|---|---|---|---|
 | TTS | Fish Speech 1.5 full | 75-word ad-read, avatar-v1 clone | 34.5s WAV | **25s** | ~4GB | E2 chain stage 1; ~145 wpm |
@@ -23,4 +27,12 @@ Three reference jobs, scored against fixed criteria — pass/fail published eith
 2. **Dubbed clip (60s)** — criteria: per-sentence timing within ±0.5s; correct SRT.
 3. **Voice clone fidelity** — criteria: blind A/B against source speaker.
 
-Results (E2, 2026-06-12): **PARTIAL PASS.** Full text→clone→TTS→lipsync chain ran end to end (TTS 25s + LatentSync 280s = ~5min for a 34.5s avatar). Mouth opens on speech, closes in silence (verified against silencedetect timestamps), so gross sync is correct. FAIL for client tier: at mouth-zoom the lip interior shows LatentSync's characteristic smearing/teeth artifacts — fine at thumbnail scale, not at full-frame. Verdict: usable for small-format social/preview, not broadcast close-ups. Output: outputs/audio/lip-sync/5d4c4fca_lipsync.mp4.
+Results (E2, 2026-06-12): **PARTIAL PASS.** Full text→clone→TTS→lipsync chain ran end to end (TTS 25s + LatentSync 280s = ~5min for a 34.5s avatar). Mouth opens on speech, closes in silence (verified against silencedetect timestamps), so gross sync is correct. FAIL for client tier: at mouth-zoom the lip interior shows LatentSync's characteristic smearing/teeth artifacts — fine at thumbnail scale, not at full-frame. Verdict: usable for small-format social/preview, not broadcast close-ups. (Reference clip withheld — the E2 test used a real-person portrait; a rights-cleared sample is pending.)
+
+## Samples — pending
+
+A curated, commercial-grade sample pack (copyright/likeness-clean) is in progress and
+will be added here before this repo's samples are advertised. The internal benchmark
+outputs that produced the numbers above are **not** published, because they used test
+assets (a real-person portrait for the avatar, an unverified TTS clip, lo-fi mono music)
+that aren't cleared for public/commercial use. Numbers are real; samples ship when clean.
