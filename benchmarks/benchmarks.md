@@ -12,10 +12,11 @@ Machine-readable version (same numbers, full schema incl. throughput/cost):
 |---|---|---|---|---|---|---|
 | TTS | Fish Speech 1.5 full | 75-word ad-read, avatar-v1 clone | 34.5s WAV | **25s** | ~4GB | E2 chain stage 1; ~145 wpm |
 | Voice clone | Demucs + Fish Speech | 30s raw sample | voice profile | | | |
-| Lipsync draft | MuseTalk | portrait + 10s audio | MP4 | | | |
-| Lipsync production | LatentSync | 626×732 portrait + 34.5s audio | 626×732 H.264 | **280s** | ~6GB | E2 2026-06-12; ~8.1s render/s-audio; mouth tracks speech/silence, interior artifacts at zoom |
-| Lipsync cinematic | Hallo2 | 512×512 portrait + 9.4s audio | H.264 MP4 | | | first verified output 2026-05-24 |
+| Lipsync draft | MuseTalk 1.5 | portrait + audio | MP4 | — | — | ⚠️ BLOCKED (mmcv/cu130) — the REBUILD TARGET (2026 #1 open model) |
+| Lipsync production | LatentSync | portrait + audio | H.264 | — | — | ⚠️ BLOCKED — produces corrupt output (mouth melt + affine seams) in the unified worker (silent diffusers drift) |
+| Lipsync cinematic | Hallo2 | portrait + audio | H.264 MP4 | — | — | ⚠️ BLOCKED — diffusers API break in the unified worker; worked in its own container 2026-05-24 |
 | Music (song) | YuE 7B | genre + lyrics, 2 short segments | 15s MP3 (mono 44.1kHz, 64kbps) | **2m 56s** | ~16GB | 2026-06-10, fresh rebuilt container, zero manual installs; mono is a YuE vocoder limit |
+| Music (instrumental) | ACE-Step 3.5B | genre/mood tags | 30s **stereo 48kHz** WAV | **~10s** | 7.4GB | WORKING via isolated venv; 1.8s diffusion (~30× realtime); stereo, higher-fi than YuE. (Maestro's old "ACE-Step" score was actually YuE.) |
 | Transcribe | Whisper V3 Turbo + WhisperX | 60s speech video | JSON + word timings | | ~2GB | |
 | Dub (video-locked) | full pipeline | 60s EN video → ES | dubbed MP4 + SRT | | | |
 
@@ -27,7 +28,30 @@ Three reference jobs, scored against fixed criteria — pass/fail published eith
 2. **Dubbed clip (60s)** — criteria: per-sentence timing within ±0.5s; correct SRT.
 3. **Voice clone fidelity** — criteria: blind A/B against source speaker.
 
-Results (E2, 2026-06-12): **PARTIAL PASS.** Full text→clone→TTS→lipsync chain ran end to end (TTS 25s + LatentSync 280s = ~5min for a 34.5s avatar). Mouth opens on speech, closes in silence (verified against silencedetect timestamps), so gross sync is correct. FAIL for client tier: at mouth-zoom the lip interior shows LatentSync's characteristic smearing/teeth artifacts — fine at thumbnail scale, not at full-frame. Verdict: usable for small-format social/preview, not broadcast close-ups. (Reference clip withheld — the E2 test used a real-person portrait; a rights-cleared sample is pending.)
+Results (E2, 2026-06-12): **PARTIAL PASS.** Full text→clone→TTS→lipsync chain ran end to end (TTS 25s + LatentSync 280s). Gross sync correct, but lip-interior artifacts at full-frame.
+
+## Lip-sync status — REBUILD REQUIRED (re-verified 2026-06-21)
+
+Deeper testing on 2026-06-21 found **all three local lip-sync models are broken** in the
+consolidated `creative-audio-worker`, each from a different environment conflict:
+
+- **LatentSync** — runs but emits **structurally corrupt** output (mouth melt + affine
+  seams), reproduced on two different portraits (full-frame AND margined). The earlier
+  "280s" run produced garbage, not a usable clip. Cause: silent diffusers/version drift.
+- **Hallo2** — `UNet2DConditionModel._set_gradient_checkpointing() got an unexpected
+  keyword 'enable'` (needs older diffusers than the worker carries). Also needed
+  `libGLESv2.so.2` (fixed live). Worked in its **own** container 2026-05-24.
+- **MuseTalk 1.5** — still blocked on mmcv/cu130. This is the **2026 #1 open lip-sync
+  model** and the chosen **rebuild target**.
+
+**Root cause:** consolidating into one worker env broke models that each need pinned,
+isolated environments. **Fix = a dedicated, pinned env per model** — spec:
+`~/Documents/audio/musetalk-1.5-rebuild-spec.md` (separate session, ~half day).
+
+**Quality ceiling:** local lip-sync tops out at **social-media / marketing grade**.
+**Broadcast-grade is cloud-only** (Kling / Hedra / HeyGen / Sync.so) — develop that
+separately. Do not advertise an avatar tile as working until the rebuild passes its
+quality gate.
 
 ## Samples — pending
 
