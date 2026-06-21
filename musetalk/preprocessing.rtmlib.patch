@@ -1,0 +1,64 @@
+--- /data/ai/01-workspace/audio/museTalk/musetalk/utils/preprocessing.py.orig-mmpose	2026-06-21 22:34:43.601460698 +0800
++++ /data/ai/01-workspace/audio/museTalk/musetalk/utils/preprocessing.py	2026-06-21 22:35:11.289171806 +0800
+@@ -7,16 +7,33 @@
+ import pickle
+ import os
+ import json
+-from mmpose.apis import inference_topdown, init_model
+-from mmpose.structures import merge_data_samples
++# --- DWPose landmark backend: ONNX via rtmlib (NOT mmpose/mmcv) ---------------
++# Rebuilt 2026-06-21 for the dedicated mushishi-musetalk env. The original
++# mmpose/mmcv path won't build for RTX 5090 SM_120 (no mmcv._ext wheel for
++# torch 2.8/cu128, and mmcv-lite can't satisfy mmpose's compiled-op imports).
++# rtmlib runs the same dw-ll_ucoco_384 RTMPose model directly on onnxruntime and
++# returns identical 133-keypoint COCO-wholebody output (face = indices 23:91).
++# Original mmpose version preserved at preprocessing.py.orig-mmpose.
+ import torch
+ from tqdm import tqdm
++from rtmlib import RTMPose
+ 
+-# initialize the mmpose model
+ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+-config_file = './musetalk/utils/dwpose/rtmpose-l_8xb32-270e_coco-ubody-wholebody-384x288.py'
+-checkpoint_file = './models/dwpose/dw-ll_ucoco_384.pth'
+-model = init_model(config_file, checkpoint_file, device=device)
++# CPU EP: ~0.03s/frame, no CUDA-EP cold start, no cuDNN dependency. The heavy
++# work (VAE/UNet/whisper) stays on torch+GPU; landmark detection isn't the
++# bottleneck. Flip to device="cuda" (cuDNN ships with torch) if profiling a long
++# video shows it matters.
++_dwpose_onnx = os.path.join("models", "dwpose", "dw-ll_ucoco_384.onnx")
++pose_model = RTMPose(_dwpose_onnx, model_input_size=(288, 384),
++                     backend="onnxruntime", device="cpu")
++
++def _dwpose_landmarks(frame):
++    """Return 133x2 COCO-wholebody keypoints for a single BGR frame, matching the
++    mmpose inference_topdown output that the rest of this module expects."""
++    h, w = frame.shape[:2]
++    bboxes = np.array([[0, 0, w, h]], dtype=np.float32)
++    keypoints, _scores = pose_model(frame, bboxes)
++    return keypoints
+ 
+ # initialize the face detection model
+ device = "cuda" if torch.cuda.is_available() else "cpu"
+@@ -53,9 +70,7 @@
+     average_range_minus = []
+     average_range_plus = []
+     for fb in tqdm(batches):
+-        results = inference_topdown(model, np.asarray(fb)[0])
+-        results = merge_data_samples(results)
+-        keypoints = results.pred_instances.keypoints
++        keypoints = _dwpose_landmarks(np.asarray(fb)[0])
+         face_land_mark= keypoints[0][23:91]
+         face_land_mark = face_land_mark.astype(np.int32)
+         
+@@ -94,9 +109,7 @@
+     average_range_minus = []
+     average_range_plus = []
+     for fb in tqdm(batches):
+-        results = inference_topdown(model, np.asarray(fb)[0])
+-        results = merge_data_samples(results)
+-        keypoints = results.pred_instances.keypoints
++        keypoints = _dwpose_landmarks(np.asarray(fb)[0])
+         face_land_mark= keypoints[0][23:91]
+         face_land_mark = face_land_mark.astype(np.int32)
+         

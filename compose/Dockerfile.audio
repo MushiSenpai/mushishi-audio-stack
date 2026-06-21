@@ -95,7 +95,7 @@ RUN pip3 install --no-cache-dir --break-system-packages torchsde
 # image): it reuses this image's SM_120 torch via `python -m venv --system-site-packages`,
 # with its own pinned deps so it can't disturb YuE / Fish Speech. It persists across
 # container recreation because it lives under /data/ai/03-data/audio. Create it once:
-#   bash /data/ai/06-configs/audio/setup-acestep-venv.sh
+#   bash /data/ai/03-data/audio/setup-acestep-venv.sh
 # (The old gateway path pointed ACE-Step at a non-existent inference.py — fixed in
 #  gateway/workers/music.py to call the venv runner /data/ai/03-data/audio/acestep_runner.py.)
 

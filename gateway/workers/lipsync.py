@@ -1,7 +1,13 @@
-# NOTE: MuseTalk (DWPose/mmcv) incompatible with cu130/torch2.8 nightly.
-# Dedicated container solution deferred to Phase B.5.
-# Draft tier remapped to LatentSync (diffusers-based, no mmcv dependency).
+# Lip-sync tiers:
+#   museTalk   (draft/social-grade) -> dedicated creative-musetalk:9005 service.
+#              Its env (DWPose via rtmlib/ONNX, no mmcv) is isolated in the
+#              mushishi-musetalk image so it can't break the YuE+Fish worker.
+#   latentsync (default) and hallo2  -> still run inline in this worker.
+# (MuseTalk's old inline mmcv path didn't build for RTX 5090 SM_120; rebuilt
+#  2026-06-21 as a separate service — see audio/musetalk-1.5-rebuild-spec.md.)
 import subprocess, os
+
+MUSETALK_API = "http://creative-musetalk:9005"
 
 MODEL_BASE = "/data/ai/02-models/audio"
 WORKSPACE  = "/data/ai/01-workspace/audio"
@@ -15,21 +21,26 @@ def generate(job_id: str, source: str = None, audio_file: str = None,
     out_path = f"{OUTPUT_DIR}/{job_id}_lipsync.mp4"
 
     if model_tier == "museTalk":
-        import tempfile, yaml
-        cfg_path = f"/tmp/{job_id}_musetalk.yaml"
-        with open(cfg_path, "w") as f:
-            yaml.dump({"task_0": {"video_path": source, "audio_path": audio_file}}, f)
-        cmd = [
-            "python3", f"{WORKSPACE}/museTalk/scripts/inference.py",
-            "--unet_model_path",  f"{MODEL_BASE}/museTalk/musetalkV15/unet.pth",
-            "--unet_config",      f"{MODEL_BASE}/museTalk/musetalk/musetalk.json",
-            "--whisper_dir",      "/data/ai/07-cache/torch",
-            "--inference_config", cfg_path,
-            "--result_dir",       OUTPUT_DIR,
-            "--version",          "v15",
-            "--use_float16",
-        ]
-    elif model_tier == "latentsync":
+        # Dedicated, isolated service (mushishi-musetalk). Call it by name like
+        # voice.py calls creative-tts. The service loads models per job and frees
+        # VRAM on exit, so this can take a couple minutes — generous timeout.
+        import requests
+        try:
+            resp = requests.post(
+                f"{MUSETALK_API}/lipsync",
+                json={"job_id": job_id, "source": source, "audio_file": audio_file},
+                timeout=1900,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e:
+            return {"error": f"musetalk service call failed: {e}", "model_used": "museTalk"}
+        if "error" in data:
+            return {"error": data["error"], "model_used": "museTalk"}
+        return {"job_id": job_id, "output_file": data.get("output_file"),
+                "model_used": "museTalk", "wall_seconds": data.get("wall_seconds")}
+
+    if model_tier == "latentsync":
         guidance = "1.0" if kwargs.get("quality") == "draft" else "1.5"
         cmd = [
             "python3", "-m", "scripts.inference",

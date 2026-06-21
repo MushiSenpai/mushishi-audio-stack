@@ -156,6 +156,24 @@ as-run worker. `apt install libgles2` ships the real lib (Ubuntu 24.04). Baked.
 the localhost-bound CPU Nemotron, and LiteLLM needs an API key — which must come from
 the worker's *env*, never the public repo. Gated until that networking is wired.
 
+**MuseTalk 1.5: replace mmcv with ONNX, don't fight it.** The 2026 #1 open
+lip-sync model ships an mmpose/mmcv landmark backend with no buildable path on an
+RTX 5090 (SM_120): there is no `mmcv._ext` wheel for torch 2.8/cu128, and
+`mmcv-lite` can't satisfy mmpose — it imports `EDPoseHead → mmcv.ops` at import
+time. The escape hatch: DWPose ships an ONNX (`dw-ll_ucoco_384.onnx`), so
+`rtmlib + onnxruntime` runs the exact same model with zero mmcv and returns the
+identical 133-keypoint output (face = indices 23:91). MuseTalk then lives in its own
+pinned image (`FROM mushishi-audio-base` + rtmlib) behind a tiny FastAPI service;
+the worker HTTP-calls it like it calls Fish Speech, so the YuE+Fish env is never
+disturbed. Three smaller traps: PyTorch 2.6 flipped `torch.load(weights_only)` to
+True and rejects the legacy face-parse checkpoints (restore the old default for a
+trusted-local-weights process); `inference.py` raises `NameError: save_dir_full` for
+image inputs (a video-only cleanup path); and the Whisper feature extractor MUST be
+whisper-**tiny** (hidden=384, matching the positional-encoding `d_model`) — whisper-large
+is the wrong dimension. Social-grade verified end-to-end: ~78s for a 34.5s 1024×1024
+talking-head, ~7.7GB peak, coherent mouth interior, no melt/smear. Broadcast
+close-ups still go to a cloud path.
+
 ## Meta-lessons
 
 1. **Entry points lie.** Three of five model repos had a different real entry

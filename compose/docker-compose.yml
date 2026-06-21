@@ -102,6 +102,38 @@ services:
               capabilities: [gpu]
     restart: unless-stopped
 
+  # ── MuseTalk 1.5 lip-sync (dedicated, pinned, isolated) ─────────────
+  # Social-grade talking-head. Separate image (mushishi-musetalk) so its env
+  # never touches the working YuE+Fish worker. Worker's lipsync.py museTalk
+  # branch calls http://creative-musetalk:9005/lipsync. Holds NO VRAM while
+  # idle (loads per job, frees on exit) — good citizen on the shared 5090.
+  musetalk:
+    image: mushishi-musetalk
+    container_name: creative-musetalk
+    runtime: nvidia
+    ports:
+      - "127.0.0.1:9005:9005"    # internal only
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - TORCH_HOME=/data/ai/07-cache/torch
+    volumes:
+      - /data/ai/01-workspace/audio/museTalk:/data/ai/01-workspace/audio/museTalk
+      - /data/ai/02-models/audio:/data/ai/02-models/audio:ro
+      - /data/ai/03-data/audio:/data/ai/03-data/audio
+      - /data/ai/08-portfolio/outputs/audio:/data/ai/08-portfolio/outputs/audio
+      - /data/ai/07-cache/torch:/data/ai/07-cache/torch
+    working_dir: /data/ai/01-workspace/audio/museTalk
+    command: uvicorn musetalk_server:app --host 0.0.0.0 --port 9005
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
   # ── Lip Sync (multi-tier) ───────────────────────────────────────────
   lipsync:
     image: mushishi-audio-base

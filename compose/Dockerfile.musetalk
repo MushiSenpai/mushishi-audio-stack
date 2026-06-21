@@ -1,0 +1,32 @@
+# Dedicated, isolated MuseTalk 1.5 lip-sync image (mushishi-musetalk).
+#
+# Builds on the PROVEN SM_120 base (mushishi-audio-base: torch 2.8.0+cu128,
+# ffmpeg, opencv-headless, diffusers, transformers, librosa, fastapi/uvicorn,
+# libgles2/libegl1). The ONLY delta vs base is rtmlib, which runs the DWPose
+# RTMPose ONNX landmark model directly on onnxruntime.
+#
+# WHY rtmlib instead of mmpose/mmcv (the upstream MuseTalk landmark backend):
+# RTX 5090 = SM_120 needs CUDA>=12.8 kernels => torch 2.8/cu128. There is no
+# prebuilt mmcv._ext wheel for that combo, and mmcv-lite (no compiled ops) can't
+# satisfy mmpose 1.3.x, which imports EDPoseHead -> mmcv.ops at import time. A
+# from-source mmcv build is the only mmpose path and is slow/fragile. rtmlib runs
+# the SAME dw-ll_ucoco_384 model on the SAME weights via onnxruntime and returns
+# identical 133-keypoint COCO-wholebody output (face = indices 23:91), with zero
+# mmcv/mmpose/mmdet/mmengine. preprocessing.py was patched to use it. This keeps
+# MuseTalk fully isolated from the working creative-audio-worker (YuE + Fish).
+FROM mushishi-audio-base
+
+# rtmlib only. --no-deps so it reuses the base onnxruntime-gpu rather than
+# pulling a second (CPU) onnxruntime alongside it. rtmlib's runtime deps
+# (numpy, opencv, onnxruntime) are already present in the base image.
+RUN pip3 install --no-cache-dir --break-system-packages --no-deps rtmlib==0.0.15
+
+WORKDIR /data/ai/01-workspace/audio/museTalk
+ENV PYTHONPATH=/data/ai/01-workspace/audio/museTalk
+ENV TORCH_HOME=/data/ai/07-cache/torch
+
+# Thin FastAPI service (musetalk_server.py) lives in the mounted workspace,
+# mirroring how the gateway / fish-speech services run mounted source — so it can
+# be edited without an image rebuild. Started via the compose `command`.
+EXPOSE 9005
+CMD ["uvicorn", "musetalk_server:app", "--host", "0.0.0.0", "--port", "9005"]

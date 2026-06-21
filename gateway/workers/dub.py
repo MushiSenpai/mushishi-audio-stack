@@ -3,8 +3,10 @@ import whisperx, requests, json, os, subprocess
 WHISPER_MODEL = "/data/ai/07-cache/torch/faster-whisper-large-v3-turbo"
 WHISPER_CACHE = "/data/ai/07-cache/torch"
 OUTPUT_DIR    = "/data/ai/08-portfolio/outputs/audio/dubbing"
-VLLM_API      = "http://host.docker.internal:8000/v1"   # Nemotron GPU
-CPU_API       = "http://host.docker.internal:8001/v1"   # Nemotron CPU (always-on floor)
+LITELLM_API   = "http://172.17.0.1:4000/v1"             # host LiteLLM (0.0.0.0:4000) -> LOCAL Nemotron (sovereign)
+LITELLM_MODEL = "personal-chain-cpu"                    # always-on CPU Nemotron via LiteLLM
+VLLM_API      = "http://host.docker.internal:8000/v1"   # Nemotron GPU (direct fallback)
+CPU_API       = "http://host.docker.internal:8001/v1"   # Nemotron CPU (direct fallback)
 TTS_API       = "http://creative-tts:9002"
 os.environ.setdefault("TORCH_HOME", "/data/ai/07-cache/torch")
 
@@ -16,18 +18,33 @@ def _translate(text: str, src_lang: str, tgt_lang: str, duration: float, wpm: fl
         f"Adjust verbosity to match the time window. Output ONLY the translation.\n\n"
         f"Text: {text}"
     )
-    for api_url in [VLLM_API, CPU_API]:
+    # Primary: LiteLLM -> LOCAL Nemotron (sovereign). The key is injected via the worker's
+    # env (LITELLM_KEY), never the repo. "detailed thinking off" keeps the reasoning model's
+    # answer in `content` instead of overrunning the budget in the reasoning channel.
+    sys_msg = "detailed thinking off\nYou are a precise translator. Output ONLY the translation — no notes, no preamble."
+    key = os.environ.get("LITELLM_KEY", "")
+    attempts = []
+    if key:
+        attempts.append((LITELLM_API, LITELLM_MODEL, {"Authorization": f"Bearer {key}"}))
+    attempts.append((VLLM_API, "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", {}))
+    attempts.append((CPU_API, "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", {}))
+    for api_url, model, headers in attempts:
         try:
             resp = requests.post(f"{api_url}/chat/completions", json={
-                "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 2000, "temperature": 0.3,
-            }, timeout=60)
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": sys_msg},
+                    {"role": "user", "content": prompt},
+                ],
+                "max_tokens": 1800, "temperature": 0.3,
+            }, headers=headers, timeout=120)
             if resp.status_code == 200:
-                return resp.json()["choices"][0]["message"]["content"].strip()
+                content = (resp.json()["choices"][0]["message"].get("content") or "").strip()
+                if content:
+                    return content
         except Exception:
             continue
-    raise RuntimeError("Translation failed: both GPU and CPU Nemotron unreachable")
+    raise RuntimeError("Translation failed: no reachable LLM (LiteLLM + direct Nemotron all failed/empty)")
 
 def _write_srt(word_timings: list, translated_text: str, out_path: str):
     lines = translated_text.split()
