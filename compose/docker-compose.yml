@@ -63,6 +63,9 @@ services:
       - TORCH_HOME=/data/ai/07-cache/torch
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
+    env_file:                      # LITELLM_KEY for cross-language dub translation (local secret, gitignored)
+      - path: litellm.env
+        required: false
     depends_on:
       - redis
       - fish-speech

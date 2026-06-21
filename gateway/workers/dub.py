@@ -4,7 +4,7 @@ WHISPER_MODEL = "/data/ai/07-cache/torch/faster-whisper-large-v3-turbo"
 WHISPER_CACHE = "/data/ai/07-cache/torch"
 OUTPUT_DIR    = "/data/ai/08-portfolio/outputs/audio/dubbing"
 LITELLM_API   = "http://172.17.0.1:4000/v1"             # host LiteLLM (0.0.0.0:4000) -> LOCAL Nemotron (sovereign)
-LITELLM_MODEL = "personal-chain-cpu"                    # always-on CPU Nemotron via LiteLLM
+LITELLM_MODEL = "sovereign-only"                        # GPU Nemotron :8000 (loaded per dub job by cross-dub.sh, then purged)
 VLLM_API      = "http://host.docker.internal:8000/v1"   # Nemotron GPU (direct fallback)
 CPU_API       = "http://host.docker.internal:8001/v1"   # Nemotron CPU (direct fallback)
 TTS_API       = "http://creative-tts:9002"
@@ -25,9 +25,10 @@ def _translate(text: str, src_lang: str, tgt_lang: str, duration: float, wpm: fl
     key = os.environ.get("LITELLM_KEY", "")
     attempts = []
     if key:
-        attempts.append((LITELLM_API, LITELLM_MODEL, {"Authorization": f"Bearer {key}"}))
-    attempts.append((VLLM_API, "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", {}))
-    attempts.append((CPU_API, "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", {}))
+        attempts.append((LITELLM_API, LITELLM_MODEL, {"Authorization": f"Bearer {key}"}))         # GPU Nemotron (cross-dub.sh loads it)
+        attempts.append((LITELLM_API, "personal-chain-cpu", {"Authorization": f"Bearer {key}"}))  # CPU floor fallback (slow)
+    attempts.append((VLLM_API, "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", {}))              # direct GPU fallback
+    attempts.append((CPU_API, "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", {}))               # direct CPU fallback
     for api_url, model, headers in attempts:
         try:
             resp = requests.post(f"{api_url}/chat/completions", json={

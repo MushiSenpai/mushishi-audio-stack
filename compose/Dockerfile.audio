@@ -52,7 +52,7 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     "face-alignment==1.4.1" \
     "kornia>=0.8.0" \
     "insightface==0.7.3" \
-    "onnxruntime-gpu>=1.21.0" \
+    "onnxruntime-gpu==1.26.0" \
     "DeepCache==0.1.1" \
     "moviepy==1.0.3" \
     "decord==0.6.0" \
