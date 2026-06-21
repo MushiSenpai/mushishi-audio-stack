@@ -1,0 +1,52 @@
+# Dedicated, isolated Hallo2 cinematic lip-sync image (mushishi-hallo2).
+#
+# Mirrors the PROVEN MuseTalk 1.5 pattern (Dockerfile.musetalk): build on the
+# SM_120 base (mushishi-audio-base: torch 2.8.0+cu128, ffmpeg, opencv-headless,
+# mediapipe, insightface, audio-separator, PyAV, libgles2/libegl1) and shadow
+# ONLY the few deps Hallo2 needs at versions that differ from the worker's.
+#
+# WHY a single diffusers pin (the ONE bug this rebuild fixes):
+# Hallo2 ships its OWN UNet/Transformer classes (hallo/models/unet_3d.py,
+# transformer_3d.py) that override `_set_gradient_checkpointing(self, module,
+# value=False)` — the OLD diffusers signature. The base carries diffusers 0.38.0,
+# whose ModelMixin.enable_gradient_checkpointing() calls
+# `_set_gradient_checkpointing(enable=...)` -> "got an unexpected keyword 'enable'".
+# diffusers 0.32.2 (Hallo2's own requirements.txt pin) still calls it the old way,
+# so the override matches and the crash disappears. This is the entire fix.
+#
+# WHY we do NOT also pin transformers/numpy (tried 4.39.2 / 1.26.4 first — it FAILED):
+# the base is built and proven on numpy 2.4.6. Downgrading to numpy 1.26.4 breaks the
+# base's numpy-2-native scipy 1.18.0 (uses `np.long`, re-added in numpy 2.0, absent in
+# 1.26.4) -> scipy -> insightface import crash. opencv 4.13 / mediapipe / librosa are
+# likewise numpy-2 wheels. Hallo2's only transformers-specific need (Wav2Vec2 eager
+# attention for output_attentions) is already committed in the repo (commit d5b8c15)
+# and works on the base's transformers; diffusers 0.32.2 lazy-imports transformers so
+# the AutoencoderKL/DDIMScheduler/UNet path Hallo2 uses never touches it. So: keep the
+# proven numpy-2 base whole, change diffusers ONLY. This shadows the base INSIDE THIS
+# IMAGE ONLY — the working YuE + Fish + MuseTalk stack is never touched.
+#
+# What we DELIBERATELY keep from the base (do NOT pin to Hallo2's originals):
+#   torch 2.8.0+cu128 / torchvision / torchaudio / xformers 0.0.32 — Hallo2's own
+#   torch/xformers pins predate Blackwell (SM_120) and would not run on the RTX 5090.
+#   av 17.1.0, mediapipe, insightface, audio-separator, decord, moviepy, numpy 2.x,
+#   transformers 4.57 — already present in the base and OK for Hallo2's inference path.
+FROM mushishi-audio-base
+
+# Delta vs the base:
+#  - diffusers 0.32.2: the gradient_checkpointing fix described above.
+#  - decorator <5: the base ships decorator 5.3.1, but moviepy 1.0.3 (used by Hallo2's
+#    tensor_to_video_batch to mux the final mp4) needs decorator<5. Under 5.x moviepy's
+#    `use_clip_fps_by_default` decorator drops the fps kwarg -> ffmpeg writer gets fps=None
+#    -> "TypeError: must be real number, not NoneType". 4.4.2 is moviepy 1.0.3's expected pair.
+RUN pip3 install --no-cache-dir --break-system-packages \
+    "diffusers==0.32.2" \
+    "decorator==4.4.2"
+
+WORKDIR /data/ai/01-workspace/audio/hallo2
+ENV PYTHONPATH=/data/ai/01-workspace/audio/hallo2
+ENV TORCH_HOME=/data/ai/07-cache/torch
+
+# Thin FastAPI service (hallo2_server.py) lives in the mounted workspace, mirroring
+# musetalk_server.py — editable without an image rebuild, started by the compose command.
+EXPOSE 9006
+CMD ["uvicorn", "hallo2_server:app", "--host", "0.0.0.0", "--port", "9006"]

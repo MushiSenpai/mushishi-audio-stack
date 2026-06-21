@@ -137,6 +137,40 @@ services:
               capabilities: [gpu]
     restart: unless-stopped
 
+  # ── Hallo2 cinematic lip-sync (dedicated, pinned, isolated) ─────────
+  # Cinematic-grade talking-head: head pose + expression + CodeFormer face
+  # enhancement — the tier MuseTalk can't do. Separate image (mushishi-hallo2:
+  # diffusers 0.32.2 + decorator<5 shadow the base) so its env never touches the
+  # working YuE+Fish worker. Worker's lipsync.py hallo2 branch calls
+  # http://creative-hallo2:9006/lipsync. Holds NO VRAM while idle (loads per job,
+  # frees on exit) — good citizen on the shared 5090. See audio/hallo2-rebuild-spec.md.
+  hallo2:
+    image: mushishi-hallo2
+    container_name: creative-hallo2
+    runtime: nvidia
+    ports:
+      - "127.0.0.1:9006:9006"    # internal only
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - TORCH_HOME=/data/ai/07-cache/torch
+    volumes:
+      - /data/ai/01-workspace/audio/hallo2:/data/ai/01-workspace/audio/hallo2
+      - /data/ai/02-models/audio:/data/ai/02-models/audio:ro
+      - /data/ai/03-data/audio:/data/ai/03-data/audio
+      - /data/ai/08-portfolio/outputs/audio:/data/ai/08-portfolio/outputs/audio
+      - /data/ai/07-cache/torch:/data/ai/07-cache/torch
+    working_dir: /data/ai/01-workspace/audio/hallo2
+    command: uvicorn hallo2_server:app --host 0.0.0.0 --port 9006
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
   # ── Lip Sync (multi-tier) ───────────────────────────────────────────
   lipsync:
     image: mushishi-audio-base

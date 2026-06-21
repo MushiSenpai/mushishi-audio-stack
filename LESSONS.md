@@ -200,6 +200,38 @@ after one failed health check — set `cooldown_time: 0` so a per-job-loaded mod
 locked out; (3) the GPU Nemotron is a reasoning model — `detailed thinking off` + a generous
 `max_tokens` (and a `reasoning_content` fallback) or it returns empty `content`.
 
+## June 22 — Hallo2 cinematic tier (the diffusers pin + the moviepy decorator trap)
+
+**The smallest correct pin beats the "authored" pin set.** Hallo2's own
+`requirements.txt` pins a trio — `diffusers==0.32.2`, `transformers==4.39.2`,
+`numpy==1.26.4`. Porting all three onto the SM_120 base **broke it**: the base is
+numpy-2-native, and `numpy==1.26.4` breaks the base's `scipy==1.18.0` (it uses
+`np.long`, a symbol numpy 2.0 *re-added* and 1.26 lacks) → scipy → insightface import
+crash. The actual bug was only ever **diffusers**: Hallo2 ships its own UNet/Transformer
+classes overriding `_set_gradient_checkpointing(self, module, value=False)` — the old
+signature — so the base's diffusers 0.38 (`enable_gradient_checkpointing()` →
+`_set_gradient_checkpointing(enable=...)`) raised `unexpected keyword 'enable'`. Pinning
+**diffusers==0.32.2 alone** fixes it; transformers (the only other concern, Wav2Vec2
+eager attention) was already patched in-repo and works on the base's 4.57. Lesson: change
+the one dep that's actually broken, keep the proven base whole — don't import a model's
+entire historical lockfile onto a newer working base.
+
+**A second, sneakier version trap: `decorator` 5.x silently breaks moviepy 1.0.3.**
+The full pipeline ran — face detected, audio separated, 150 diffusion frames generated —
+then died at the very last step muxing the mp4: `TypeError: must be real number, not
+NoneType` on `fps`. Cause: the base ships `decorator==5.3.1`, but moviepy 1.0.3's
+`use_clip_fps_by_default` decorator (which injects the fps kwarg) only works with
+`decorator<5`; under 5.x the explicit `fps=25` gets dropped. Fix: pin `decorator==4.4.2`.
+The tell was that *every compute step succeeded and only file-writing failed* — that
+shape points at an I/O-library version mismatch, not the model.
+
+**Cinematic ≠ free.** Hallo2 is heavy: ~13.3GB peak and **~35× slower than realtime
+(1197s for a 34.5s 512² clip)** — diffusion + reference UNet + audio cross-attn, 40
+steps/segment — i.e. ~15× slower than MuseTalk's social-grade 78s/34.5s at 7.7GB. Verified end-to-end via the gateway
+(`lipsync quality=cinematic → creative-hallo2:9006`): coherent mouth interior, teeth,
+no melt/smear, plus head-pose + expression motion (the thing MuseTalk can't do).
+It's the right tool for non-headshot/expressive framing, not for bulk social clips.
+
 ## Meta-lessons
 
 1. **Entry points lie.** Three of five model repos had a different real entry

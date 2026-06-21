@@ -12,9 +12,9 @@ Machine-readable version (same numbers, full schema incl. throughput/cost):
 |---|---|---|---|---|---|---|
 | TTS | Fish Speech 1.5 full | 75-word ad-read, avatar-v1 clone | 34.5s WAV | **25s** | ~4GB | E2 chain stage 1; ~145 wpm |
 | Voice clone | Demucs + Fish Speech | 30s raw sample | voice profile | | | |
-| Lipsync draft | MuseTalk 1.5 | portrait + audio | MP4 | — | — | ⚠️ BLOCKED (mmcv/cu130) — the REBUILD TARGET (2026 #1 open model) |
-| Lipsync production | LatentSync | portrait + audio | H.264 | — | — | ⚠️ BLOCKED — produces corrupt output (mouth melt + affine seams) in the unified worker (silent diffusers drift) |
-| Lipsync cinematic | Hallo2 | portrait + audio | H.264 MP4 | — | — | ⚠️ BLOCKED — diffusers API break in the unified worker; worked in its own container 2026-05-24 |
+| Lipsync draft | MuseTalk 1.5 | portrait + audio (34.5s) | MP4 1024² 25fps | **78s** | ~7.7GB | ✅ WORKING — dedicated `creative-musetalk:9005` (rtmlib ONNX DWPose, no mmcv). Social-grade, no melt. |
+| Lipsync production | LatentSync | portrait + audio | H.264 | — | — | ⚠️ BLOCKED — corrupt output (mouth melt + affine seams) in the unified worker; **superseded by MuseTalk** (not rebuilt) |
+| Lipsync cinematic | Hallo2 | portrait + audio (34.5s) | MP4 512² 25fps | **1197s** | ~13.3GB | ✅ WORKING — dedicated `creative-hallo2:9006` (diffusers 0.32.2 pin). Head pose + expression + CodeFormer; ~15× slower than MuseTalk → non-headshot/expressive framing. |
 | Music (song) | YuE 7B | genre + lyrics, 2 short segments | 15s MP3 (mono 44.1kHz, 64kbps) | **2m 56s** | ~16GB | 2026-06-10, fresh rebuilt container, zero manual installs; mono is a YuE vocoder limit |
 | Music (instrumental) | ACE-Step 3.5B | genre/mood tags | 30s **stereo 48kHz** WAV | **~10s** | 7.4GB | WORKING via isolated venv; 1.8s diffusion (~30× realtime); stereo, higher-fi than YuE. (Maestro's old "ACE-Step" score was actually YuE.) |
 | Transcribe | Whisper V3 Turbo + WhisperX | 60s speech video | JSON + word timings | | ~2GB | |
@@ -30,28 +30,28 @@ Three reference jobs, scored against fixed criteria — pass/fail published eith
 
 Results (E2, 2026-06-12): **PARTIAL PASS.** Full text→clone→TTS→lipsync chain ran end to end (TTS 25s + LatentSync 280s). Gross sync correct, but lip-interior artifacts at full-frame.
 
-## Lip-sync status — REBUILD REQUIRED (re-verified 2026-06-21)
+## Lip-sync status — REBUILT (2026-06-21 / 06-22)
 
-Deeper testing on 2026-06-21 found **all three local lip-sync models are broken** in the
-consolidated `creative-audio-worker`, each from a different environment conflict:
+Consolidating into one worker env broke all three local lip-sync models, each from a
+different conflict. **Fix = a dedicated, pinned, isolated image+service per model** — the
+worker HTTP-calls each by name, so the working YuE+Fish env is never touched. Two were
+rebuilt; LatentSync was dropped (MuseTalk supersedes it).
 
-- **LatentSync** — runs but emits **structurally corrupt** output (mouth melt + affine
-  seams), reproduced on two different portraits (full-frame AND margined). The earlier
-  "280s" run produced garbage, not a usable clip. Cause: silent diffusers/version drift.
-- **Hallo2** — `UNet2DConditionModel._set_gradient_checkpointing() got an unexpected
-  keyword 'enable'` (needs older diffusers than the worker carries). Also needed
-  `libGLESv2.so.2` (fixed live). Worked in its **own** container 2026-05-24.
-- **MuseTalk 1.5** — still blocked on mmcv/cu130. This is the **2026 #1 open lip-sync
-  model** and the chosen **rebuild target**.
+- ✅ **MuseTalk 1.5** (`creative-musetalk:9005`, social/draft) — the mmcv/SM_120 wall is
+  unwinnable (no `mmcv._ext` wheel for torch 2.8/cu128); fix = run DWPose via **rtmlib
+  ONNX**, no mmcv. 78s / 34.5s @1024², ~7.7GB, coherent mouth, no melt. Spec:
+  `docs/musetalk-1.5-rebuild-spec.md`.
+- ✅ **Hallo2** (`creative-hallo2:9006`, cinematic) — Hallo2 ships its own UNet overriding
+  the OLD `_set_gradient_checkpointing(module, value)` signature, so base diffusers 0.38
+  (`enable=`) crashed; fix = pin **`diffusers==0.32.2` alone** (+ `decorator==4.4.2` for
+  moviepy's mp4 mux). 1197s / 34.5s @512², ~13.3GB; head pose + expression + CodeFormer.
+  ~15× slower than MuseTalk → reserve for non-headshot/expressive framing. Spec:
+  `docs/hallo2-rebuild-spec.md`.
+- ⚠️ **LatentSync** — corrupt output (mouth melt + affine seams) in the unified worker;
+  **not rebuilt** (MuseTalk is the working portrait path).
 
-**Root cause:** consolidating into one worker env broke models that each need pinned,
-isolated environments. **Fix = a dedicated, pinned env per model** — spec:
-`docs/musetalk-1.5-rebuild-spec.md` (separate session, ~half day).
-
-**Quality ceiling:** local lip-sync tops out at **social-media / marketing grade**.
-**Broadcast-grade is cloud-only** (Kling / Hedra / HeyGen / Sync.so) — develop that
-separately. Do not advertise an avatar tile as working until the rebuild passes its
-quality gate.
+**Quality ceiling:** local lip-sync tops out at **social / cinematic grade**.
+**Broadcast-grade close-ups stay cloud-only** (Kling / Hedra / HeyGen / Sync.so).
 
 ## Samples
 
@@ -65,6 +65,9 @@ LLM-written lyrics, synthetic TTS voice). Hear/see them:
 | [`samples/song-hiphop.mp3`](samples/song-hiphop.mp3) | Music — YuE 7B | 48s conscious-rap, satirical lyrics |
 | [`samples/instrumental.mp3`](samples/instrumental.mp3) | Music — ACE-Step | stereo instrumental (source 48kHz; 320k mp3 here) |
 | [`samples/portrait.png`](samples/portrait.png) | Image — FLUX.2 | synthetic portrait (the avatar input; owned, no real likeness) |
+| [`samples/avatar-musetalk-social.mp4`](samples/avatar-musetalk-social.mp4) | Lip-sync — MuseTalk 1.5 | 34.5s social-grade talking-head, 1024² (synthetic portrait + TTS voice) |
+| [`samples/avatar-hallo2-cinematic.mp4`](samples/avatar-hallo2-cinematic.mp4) | Lip-sync — Hallo2 | 34.5s cinematic talking-head, 512², head pose + expression (synthetic portrait + TTS voice) |
 
-The lip-sync/avatar clip is intentionally **not** included — local lip-sync is pending the
-rebuild (see "Lip-sync status" above); broadcast-grade uses a cloud path.
+Local lip-sync now ships at **social grade (MuseTalk)** and **cinematic grade (Hallo2)** —
+both clips above are generated on the box from the synthetic portrait. **Broadcast-grade
+close-ups still use a cloud path** (see "Lip-sync status" above).
