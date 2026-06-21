@@ -174,6 +174,30 @@ is the wrong dimension. Social-grade verified end-to-end: ~78s for a 34.5s 1024�
 talking-head, ~7.7GB peak, coherent mouth interior, no melt/smear. Broadcast
 close-ups still go to a cloud path.
 
+## June 22 update: a rebuild's own dep-rot, and the dub VRAM wall
+
+**Pinning the proven set is not optional — and your validation must exercise the
+dep you're worried about.** Rebuilding `mushishi-audio-base` to *bake* the libgles2/
+torchsde fixes pulled `onnxruntime-gpu` from the unpinned `>=1.21.0` up to **1.27.0,
+which needs CUDA 13** (`libcudart.so.13`) against a CUDA-12.8 base — silently breaking
+transcribe/dub/MuseTalk. The ACE-Step smoke test passed because ACE-Step doesn't import
+onnxruntime; the dub caught it. Fix: pin `onnxruntime-gpu==1.26.0` (the freeze's proven
+version). Lesson within the lesson: a "rebuild validated" smoke test that doesn't touch
+the onnxruntime path isn't a validation.
+
+**Cross-language dub on one 32GB GPU is a hard VRAM wall.** The dub pipeline needs the
+**~26GB GPU Nemotron (translate) + Whisper (transcribe) + Fish Speech (TTS) at once** —
+~31.7GB, no margin → CUDA OOM. Lowering the agent's `gpu-memory-utilization` to make room
+for the audio models starves the model's own KV cache and it won't load (it needs ~0.80+).
+There is no co-load that fits. The real fix is a **phased VRAM handoff** within the dub
+(transcribe → free Whisper → load+translate+free Nemotron → TTS), or a small dedicated
+translation model, or cloud translate. Same-language dub (no translation) fits fine (~20s).
+Two sub-lessons proven along the way: (1) load the big model into FREE VRAM *first*, then
+warm the small services — warming both at once races and KV-cache-OOMs the loader; (2) the
+worker can only reach the Nemotron via LiteLLM (sovereign firewall isolates :8000/:8001),
+and LiteLLM cooled `sovereign-only` for an hour after a single failed health check — set
+`cooldown_time: 0` on that deployment so a per-job-loaded model isn't locked out.
+
 ## Meta-lessons
 
 1. **Entry points lie.** Three of five model repos had a different real entry
