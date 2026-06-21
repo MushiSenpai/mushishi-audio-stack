@@ -10,8 +10,11 @@ RUN apt update && apt install -y \
     git wget curl ffmpeg \
     libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev \
     libsndfile1 libportaudio2 libasound2-dev \
-    libegl1 \
+    libegl1 libgles2 \
     && rm -rf /var/lib/apt/lists/*
+# libgles2 ships the REAL libGLESv2.so.2 (Ubuntu 24.04) that mediapipe's face
+# landmarker needs — more reliable than the libGLESv2_nvidia symlink below, which
+# did not resolve on the as-run worker (2026-06-21).
 
 # PyTorch STABLE, pinned (2026-06-10 — was nightly cu130).
 # History: May 2026 required nightly for RTX 5090 SM_120. By June 2026 the
@@ -83,5 +86,17 @@ RUN ln -sf /usr/lib/x86_64-linux-gnu/libGLESv2_nvidia.so.2 \
 #  ABI fix; stable torch 2.8.0 ships a consistent nccl dep set already.)
 RUN pip3 install --no-cache-dir --break-system-packages \
     audio-separator
+
+# Stable Audio runs via diffusers StableAudioPipeline (stable_audio_tools is NOT used —
+# it requires Python<3.11; this worker is 3.12). Its scheduler needs torchsde.
+RUN pip3 install --no-cache-dir --break-system-packages torchsde
+
+# ACE-Step instrumental runs in an ISOLATED venv on the DATA MOUNT (not baked into the
+# image): it reuses this image's SM_120 torch via `python -m venv --system-site-packages`,
+# with its own pinned deps so it can't disturb YuE / Fish Speech. It persists across
+# container recreation because it lives under /data/ai/03-data/audio. Create it once:
+#   bash /data/ai/06-configs/audio/setup-acestep-venv.sh
+# (The old gateway path pointed ACE-Step at a non-existent inference.py — fixed in
+#  gateway/workers/music.py to call the venv runner /data/ai/03-data/audio/acestep_runner.py.)
 
 WORKDIR /app

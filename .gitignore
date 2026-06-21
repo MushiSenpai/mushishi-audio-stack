@@ -1,3 +1,4 @@
-
-# media samples held local until a commercial-grade, rights-cleared set is ready
-benchmarks/samples/
+__pycache__/
+*.pyc
+.venv/
+*.log

@@ -53,10 +53,18 @@ isolated environments. **Fix = a dedicated, pinned env per model** — spec:
 separately. Do not advertise an avatar tile as working until the rebuild passes its
 quality gate.
 
-## Samples — pending
+## Samples
 
-A curated, commercial-grade sample pack (copyright/likeness-clean) is in progress and
-will be added here before this repo's samples are advertised. The internal benchmark
-outputs that produced the numbers above are **not** published, because they used test
-assets (a real-person portrait for the avatar, an unverified TTS clip, lo-fi mono music)
-that aren't cleared for public/commercial use. Numbers are real; samples ship when clean.
+Curated, copyright/likeness-clean outputs — all generated on the box (synthetic portrait,
+LLM-written lyrics, synthetic TTS voice). Hear/see them:
+
+| File | From | What it is |
+|---|---|---|
+| [`samples/voiceover.wav`](samples/voiceover.wav) | TTS — Fish Speech 1.5 | 34.5s brand voiceover (synthetic voice) |
+| [`samples/song-pop-satire.mp3`](samples/song-pop-satire.mp3) | Music — YuE 7B | 58s full song, satirical lyrics |
+| [`samples/song-hiphop.mp3`](samples/song-hiphop.mp3) | Music — YuE 7B | 48s conscious-rap, satirical lyrics |
+| [`samples/instrumental.mp3`](samples/instrumental.mp3) | Music — ACE-Step | stereo instrumental (source 48kHz; 320k mp3 here) |
+| [`samples/portrait.png`](samples/portrait.png) | Image — FLUX.2 | synthetic portrait (the avatar input; owned, no real likeness) |
+
+The lip-sync/avatar clip is intentionally **not** included — local lip-sync is pending the
+rebuild (see "Lip-sync status" above); broadcast-grade uses a cloud path.

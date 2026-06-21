@@ -37,35 +37,32 @@ def generate(job_id: str, text: str = None, lyrics: str = None,
         ]
 
     elif model_tier == "ace_step":
+        # ACE-Step runs in an ISOLATED venv (reuses the system SM_120 torch; its deps are
+        # isolated so the worker's YuE/Fish Speech env is untouched). The old path pointed
+        # at a non-existent inference.py (that dir holds the WEIGHTS, not the code).
+        os.environ["ACE_CKPT"]     = f"{MODEL_BASE}/ace-step"
+        os.environ["ACE_PROMPT"]   = text or "warm cinematic instrumental, clean studio production, no vocals"
+        os.environ["ACE_LYRICS"]   = lyrics or "[inst]"
+        os.environ["ACE_DURATION"] = str(duration)
+        os.environ["ACE_OUT"]      = out_path
         cmd = [
-            "python3", f"{WORKSPACE}/ace-step/inference.py",
-            "--prompt", text or "cinematic atmospheric music",
-            "--duration", str(duration),
-            "--output", out_path,
+            "/data/ai/03-data/audio/ace-step-venv/bin/python",
+            "/data/ai/03-data/audio/acestep_runner.py",
         ]
 
     elif model_tier == "stable_audio":
-        prompt_escaped = (text or "cinematic ambient score").replace("'", "\\'")
-        cmd = [
-            "python3", "-c", f"""
-import torch, soundfile as sf, os
-os.environ['TORCH_HOME'] = '/data/ai/07-cache/torch'
-from stable_audio_tools import get_pretrained_model
-from stable_audio_tools.inference.generation import generate_diffusion_cond
-model, config = get_pretrained_model('{MODEL_BASE}/stable-audio')
-model = model.to('cuda')
-output = generate_diffusion_cond(
-    model, steps=100, cfg_scale=7,
-    conditioning=[{{'prompt': '{prompt_escaped}',
-                   'seconds_start': 0, 'seconds_total': {duration}}}],
-    sample_size=config['sample_size'],
-    sigma_min=0.3, sigma_max=500,
-    sampler_type='dpmpp-3m-sde', device='cuda'
-)
-sf.write('{out_path}', output.squeeze().cpu().numpy().T, config['sample_rate'])
-print('Done: {out_path}')
-"""
-        ]
+        # Use diffusers StableAudioPipeline (stable_audio_tools needs Python<3.11; worker is 3.12).
+        prompt = text or "cinematic ambient score, clean production"
+        code = (
+            "import torch, soundfile as sf\n"
+            "from diffusers import StableAudioPipeline\n"
+            f"pipe = StableAudioPipeline.from_pretrained('{MODEL_BASE}/stable-audio', torch_dtype=torch.float16).to('cuda')\n"
+            f"res = pipe(prompt={prompt!r}, negative_prompt='low quality', num_inference_steps=100, audio_end_in_s={float(duration)}, num_waveforms_per_prompt=1)\n"
+            f"audio = res.audios[0].T.float().cpu().numpy()\n"
+            f"sf.write('{out_path}', audio, pipe.vae.sampling_rate)\n"
+            "print('Done')\n"
+        )
+        cmd = ["python3", "-c", code]
     else:
         return {"error": f"Unknown model_tier: {model_tier}. Use ace_step, stable_audio, or yue_7b."}
 

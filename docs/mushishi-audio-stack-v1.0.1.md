@@ -10,9 +10,9 @@ tags:
   - docker
   - open-source
 status: active
-version: 1.0.1
+version: 1.1
 created: 2026-05-23
-updated: 2026-06-10
+updated: 2026-06-21
 hardware: RTX 5090 · Ryzen 9 9900X3D · 128GB DDR5 · Ubuntu 24.04 · CUDA 13.2
 companion: mushishi-sovereign-ai-stack-v1.7.1.md
 sovereignty: T1 (all tools local, MIT/Apache 2.0 only)
@@ -20,18 +20,26 @@ sovereignty: T1 (all tools local, MIT/Apache 2.0 only)
 
 # 🎙️ Mushishi Audio Stack — Voice, Music, Lip Sync & Dubbing
 
-> **Version:** 1.0.1 | **Updated:** June 10, 2026 | **Status:** ✅ BUILT — Phases A + B1–B5 complete and verified
+> **Version:** 1.1 | **Updated:** June 21, 2026 | **Status:** ✅ BUILT — Phases A + B1–B5 complete; **see the Working-vs-Broken matrix below.**
 >
-> **⚠️ AS-BUILT STATUS (v1.0.1 patch, 2026-06-10):** This spec was written as a plan on May 23
-> and is now EXECUTED: Phase A (gateway :9000, Redis, rq-dashboard :9010, Fish Speech :9002,
-> WhisperX, MuseTalk, ACE-Step, Stable Audio — all 15 sdd-verify checks passed) and Phase B
-> (B1 LatentSync, B2 Hallo2, B3 YuE 7B, B4 avatar pipeline, B5 dubbing pipeline) are complete.
-> The install required ~25 deviations from this spec (Fish Speech pinned to v1.5.1, separate
-> `audio-worker` container with `runtime: nvidia`, WhisperX CTranslate2 conversion, six Hallo2
-> patches, YuE patches, and more). **Do NOT re-execute from this document alone** — the
-> as-built lessons live in Claude's memory (`feedback_audio_stack.md`) and are pending fold-in
-> as v1.1. Known open item: the worker image lacks baked `sentencepiece`/`pydub` (reinstall
-> after any container restart until Dockerfile.audio is rebuilt — see ~/Documents/EXECUTION-PLAN.md task B1).
+> **⚠️ AS-BUILT STATUS (v1.1, 2026-06-21):** This spec was a plan on May 23 and is now EXECUTED.
+> The install required ~25 deviations (Fish Speech pinned to v1.5.1, a single `audio-worker`
+> container with `runtime: nvidia` that delegates to model microservices, WhisperX CTranslate2
+> conversion, YuE/Hallo2 patches, and more). **Do NOT re-execute from this document alone** —
+> the as-built lessons live in the repo `LESSONS.md` + Claude memory (`feedback_audio_stack.md`).
+> Dockerfile.audio now **bakes** the proven torch 2.8.0 set + sentencepiece/pydub + libgles2 +
+> torchsde (the old runtime-rot is fixed).
+>
+> **What actually works today (re-verified 2026-06-21):**
+> - ✅ **TTS** (Fish Speech 1.5, 25s) · **Voice clone** (Demucs+Fish, ~5s) · **Transcribe**
+>   (Whisper+WhisperX, ~15s/34.5s) · **Dub** (video_locked) · **Music**: YuE 7B songs (~3–9min),
+>   **ACE-Step** instrumental (stereo 48kHz, ~10s — via an isolated venv, now wired into the
+>   gateway), **Stable Audio** (stereo 44.1kHz, ~18s — via diffusers, not stable_audio_tools).
+> - ❌ **Lip-sync / avatar — ALL 3 models broken** in the unified worker (LatentSync emits
+>   corrupt output; Hallo2 diffusers-API break; MuseTalk mmcv/cu130). Root cause: one shared env
+>   can't satisfy models that need pinned isolated envs. **REBUILD REQUIRED** — dedicated MuseTalk
+>   1.5 env (spec: `~/Documents/audio/musetalk-1.5-rebuild-spec.md`). Local lip-sync ceiling =
+>   **social-grade**; broadcast = cloud.
 >
 > This document is a companion to the **Mushishi Sovereign AI Stack v1.6.4**. It follows the same conventions: `/data/ai/` folder structure, Docker Compose services, systemd for always-on daemons, Tailscale-only port exposure, SDD spec-driven execution, and the sovereignty tier model. Do not execute without reading the main stack document first.
 
