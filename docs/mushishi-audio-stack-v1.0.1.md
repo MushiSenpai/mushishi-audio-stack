@@ -38,7 +38,7 @@ sovereignty: T1 (all tools local, MIT/Apache 2.0 only)
 > - ❌ **Lip-sync / avatar — ALL 3 models broken** in the unified worker (LatentSync emits
 >   corrupt output; Hallo2 diffusers-API break; MuseTalk mmcv/cu130). Root cause: one shared env
 >   can't satisfy models that need pinned isolated envs. **REBUILD REQUIRED** — dedicated MuseTalk
->   1.5 env (spec: `~/Documents/audio/musetalk-1.5-rebuild-spec.md`). Local lip-sync ceiling =
+>   1.5 env (spec: `docs/musetalk-1.5-rebuild-spec.md`). Local lip-sync ceiling =
 >   **social-grade**; broadcast = cloud.
 >
 > This document is a companion to the **Mushishi Sovereign AI Stack v1.6.4**. It follows the same conventions: `/data/ai/` folder structure, Docker Compose services, systemd for always-on daemons, Tailscale-only port exposure, SDD spec-driven execution, and the sovereignty tier model. Do not execute without reading the main stack document first.

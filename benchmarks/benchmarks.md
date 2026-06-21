@@ -46,7 +46,7 @@ consolidated `creative-audio-worker`, each from a different environment conflict
 
 **Root cause:** consolidating into one worker env broke models that each need pinned,
 isolated environments. **Fix = a dedicated, pinned env per model** — spec:
-`~/Documents/audio/musetalk-1.5-rebuild-spec.md` (separate session, ~half day).
+`docs/musetalk-1.5-rebuild-spec.md` (separate session, ~half day).
 
 **Quality ceiling:** local lip-sync tops out at **social-media / marketing grade**.
 **Broadcast-grade is cloud-only** (Kling / Hedra / HeyGen / Sync.so) — develop that

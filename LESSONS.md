@@ -118,6 +118,44 @@ xformers (broke Hallo2's tier) weeks after install. If a dependency matters, it
 lives in the Dockerfile — verified here by rebuilding and running a YuE song
 job on a fresh container with zero manual installs.
 
+## June 21 update: gateway music, isolated venvs, and the lip-sync env collision
+
+**The "ACE-Step" score was never ACE-Step.** Maestro's music came from
+`workers.music.generate(model_tier='yue_7b')` — the gateway's actual `ace_step`
+branch pointed `python3` at `/01-workspace/audio/ace-step/inference.py`, which does
+not exist (that dir holds the *weights*, not code). ACE-Step's code is the separate
+`acestep` package.
+
+**One shared worker env can't host every model — the lip-sync collision.** The
+consolidated worker (torch 2.8 + newer diffusers, tuned for YuE + Fish Speech)
+silently breaks all three lip-sync models at once: LatentSync emits *structurally
+corrupt* output (mouth melt + affine seams — no error, just garbage), Hallo2 throws
+`_set_gradient_checkpointing() got an unexpected keyword 'enable'` (needs older
+diffusers) plus a missing `libGLESv2.so.2`, and MuseTalk is still mmcv/cu130-blocked.
+They worked as *separate* containers. **Lesson: models with conflicting pinned deps
+need isolated environments, not one mega-env.** Rebuild target = MuseTalk 1.5 (the
+2026 #1 open model). Local lip-sync ceiling = social-grade; broadcast = cloud.
+
+**Isolated venv = the clean way to add a conflicting model without a rebuild.**
+`python -m venv --system-site-packages` reuses the image's SM_120 torch, while the
+venv's own pinned deps (transformers 4.50, etc.) shadow the system ones *only inside
+the venv*. ACE-Step now runs this way (stereo 48kHz, ~10s) and the worker's YuE /
+Fish Speech are untouched. The venv lives on a data mount so it survives recreation;
+`scripts/setup-acestep-venv.sh` recreates it idempotently.
+
+**Stable Audio: use diffusers, not stable_audio_tools.** `stable_audio_tools`
+requires Python <3.11; the worker is 3.12. `diffusers.StableAudioPipeline` works on
+3.12 (needs `torchsde` for its scheduler) — stereo 44.1kHz, ~18s.
+
+**`libgles2`, not the nvidia symlink.** The Dockerfile symlinked
+`libGLESv2_nvidia.so.2` → `libGLESv2.so.2`, but that target did not resolve on the
+as-run worker. `apt install libgles2` ships the real lib (Ubuntu 24.04). Baked.
+
+**The dub is sovereign-isolated from the LLM.** Same-language dub works end-to-end
+(~20s). Cross-language needs the translation LLM, but the worker container can't reach
+the localhost-bound CPU Nemotron, and LiteLLM needs an API key — which must come from
+the worker's *env*, never the public repo. Gated until that networking is wired.
+
 ## Meta-lessons
 
 1. **Entry points lie.** Three of five model repos had a different real entry
