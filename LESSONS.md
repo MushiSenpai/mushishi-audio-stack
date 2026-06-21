@@ -185,18 +185,20 @@ onnxruntime; the dub caught it. Fix: pin `onnxruntime-gpu==1.26.0` (the freeze's
 version). Lesson within the lesson: a "rebuild validated" smoke test that doesn't touch
 the onnxruntime path isn't a validation.
 
-**Cross-language dub on one 32GB GPU is a hard VRAM wall.** The dub pipeline needs the
+**Cross-language dub on one 32GB GPU: PHASE it, don't co-load.** The naive path holds
 **~26GB GPU Nemotron (translate) + Whisper (transcribe) + Fish Speech (TTS) at once** —
-~31.7GB, no margin → CUDA OOM. Lowering the agent's `gpu-memory-utilization` to make room
-for the audio models starves the model's own KV cache and it won't load (it needs ~0.80+).
-There is no co-load that fits. The real fix is a **phased VRAM handoff** within the dub
-(transcribe → free Whisper → load+translate+free Nemotron → TTS), or a small dedicated
-translation model, or cloud translate. Same-language dub (no translation) fits fine (~20s).
-Two sub-lessons proven along the way: (1) load the big model into FREE VRAM *first*, then
-warm the small services — warming both at once races and KV-cache-OOMs the loader; (2) the
-worker can only reach the Nemotron via LiteLLM (sovereign firewall isolates :8000/:8001),
-and LiteLLM cooled `sovereign-only` for an hour after a single failed health check — set
-`cooldown_time: 0` on that deployment so a per-job-loaded model isn't locked out.
+~31.7GB, no margin → CUDA OOM. And you can't tune your way out: lowering the agent's
+`gpu-memory-utilization` to free room starves the model's own KV cache and it won't load
+(needs ~0.80+). The fix that WORKS (validated EN→ES, `scripts/cross-dub.sh`) is a **phased
+VRAM handoff** — one big model resident at a time: transcribe (Whisper) → **restart the
+worker to free Whisper** → load Nemotron (now only Fish resident, ~29GB peak) → translate →
+**purge Nemotron** → TTS (Fish) → ffmpeg mux. Same-language dub (no translation) skips all
+this (~20s). Three sub-lessons: (1) the dub-as-one-job assumption is the bug — split it so
+each model loads/frees in turn; (2) the worker reaches the Nemotron only via LiteLLM
+(sovereign firewall isolates :8000/:8001), and LiteLLM cooled `sovereign-only` for an hour
+after one failed health check — set `cooldown_time: 0` so a per-job-loaded model isn't
+locked out; (3) the GPU Nemotron is a reasoning model — `detailed thinking off` + a generous
+`max_tokens` (and a `reasoning_content` fallback) or it returns empty `content`.
 
 ## Meta-lessons
 
