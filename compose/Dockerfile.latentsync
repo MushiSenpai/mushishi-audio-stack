@@ -1,0 +1,56 @@
+# Dedicated, isolated LatentSync 1.6 portrait lip-sync image (mushishi-latentsync).
+#
+# Mirrors the PROVEN MuseTalk 1.5 / Hallo2 pattern (Dockerfile.musetalk,
+# Dockerfile.hallo2): build on the SM_120 base (mushishi-audio-base: torch
+# 2.8.0+cu128, ffmpeg, opencv-headless, mediapipe, insightface, onnxruntime-gpu,
+# diffusers, accelerate, lpips, face-alignment, kornia, DeepCache, einops,
+# imageio/imageio-ffmpeg, libgles2/libegl1) and shadow ONLY the one dep whose
+# version differs from the worker's.
+#
+# WHY a single diffusers pin (the ONE bug this rebuild closes):
+# LatentSync is an audio-conditioned latent-diffusion lip-sync (Whisper embeds ->
+# UNet3DConditionModel -> sd-vae-ft-mse decode). Its UNet/VAE path is sensitive to
+# the EXACT diffusers it was authored against. LatentSync's own requirements pin
+# diffusers==0.32.2. The consolidated worker carries the base's newer diffusers
+# (>=0.32.0 -> resolved ~0.38.x), and that silent drift is exactly what produced
+# the 1.5 "melted mouth + diagonal affine seams" corruption on two portraits
+# (audio-benchmarks.csv LatentSync row). Pinning 0.32.2 here removes the drift.
+# This shadows the base's diffusers INSIDE THIS IMAGE ONLY — the working
+# YuE + Fish + MuseTalk + Hallo2 stack is never touched.
+#
+# WHY 1.6 (not 1.5): per the ByteDance/LatentSync-1.6 model card, 1.6 is the SAME
+# code + SAME training strategy as 1.5 with the dataset upgraded to 512x512 —
+# "the current code is compatible with both 1.5 and 1.6; load the corresponding
+# checkpoint and modify the resolution parameter." So 1.6 = a checkpoint swap on
+# configs/unet/stage2_512.yaml (already resolution: 512), which the card says
+# yields "significantly clearer teeth and lip details." The 1.6 latentsync_unet.pt
+# lives at /data/ai/02-models/audio/latentsync-1.6/ and is passed by absolute path;
+# whisper/tiny.pt + insightface buffalo_l (auxiliary) are byte-identical to 1.5 and
+# come via the repo `checkpoints` symlink -> the 1.5 weights dir.
+#
+# What we DELIBERATELY keep from the base (do NOT pin to LatentSync's originals):
+#   torch 2.8.0+cu128 / torchvision / torchaudio — LatentSync's own torch==2.5.1+cu121
+#   pin has NO SM_120 kernels and would not run on the RTX 5090 (Blackwell).
+#   transformers (base ~4.57), numpy 2.x, opencv-headless, onnxruntime-gpu 1.26,
+#   insightface, decord — already present and OK for LatentSync's inference path
+#   (it uses its OWN bundled whisper, not transformers Whisper; diffusers 0.32.2
+#   lazy-imports transformers, and the AutoencoderKL/DDIMScheduler/UNet path never
+#   hits it — same reasoning proven for Hallo2). Video muxing is imageio, not
+#   moviepy, so NO decorator downgrade is needed (unlike Hallo2).
+FROM mushishi-audio-base
+
+# The entire delta vs the base: pin diffusers to LatentSync's authored version.
+RUN pip3 install --no-cache-dir --break-system-packages "diffusers==0.32.2"
+
+WORKDIR /data/ai/01-workspace/audio/latentsync
+ENV PYTHONPATH=/data/ai/01-workspace/audio/latentsync
+ENV TORCH_HOME=/data/ai/07-cache/torch
+# Resolve stabilityai/sd-vae-ft-mse from the shared, pre-warmed HF cache (mounted)
+# rather than the network — reproducible + offline-capable.
+ENV HF_HOME=/data/ai/07-cache/huggingface
+
+# Thin FastAPI service (latentsync_server.py) lives in the mounted workspace,
+# mirroring musetalk_server.py / hallo2_server.py — editable without an image
+# rebuild, started by the compose command.
+EXPOSE 9007
+CMD ["uvicorn", "latentsync_server:app", "--host", "0.0.0.0", "--port", "9007"]

@@ -232,6 +232,45 @@ steps/segment — i.e. ~15× slower than MuseTalk's social-grade 78s/34.5s at 7.
 no melt/smear, plus head-pose + expression motion (the thing MuseTalk can't do).
 It's the right tool for non-headshot/expressive framing, not for bulk social clips.
 
+## June 22 — LatentSync 1.6: the third pin, and an honest A/B that ended in "kept, not won"
+
+**The exact same one-line fix worked a third time.** LatentSync 1.5 produced
+structurally corrupt output in the consolidated worker — a melted, glassy lower
+face with diagonal affine seams, reproduced on two different portraits. It looked
+like a margin/quality bug; it wasn't. It was the *identical* root cause as Hallo2:
+silent diffusers drift. LatentSync was authored against `diffusers==0.32.2`; the
+shared worker carried the base's newer diffusers (`>=0.32.0` → ~0.38), and the
+latent-diffusion UNet/VAE decode is version-sensitive enough to turn that into
+garbage. Fix: a dedicated `mushishi-latentsync` image = `FROM mushishi-audio-base`
++ `diffusers==0.32.2` ALONE — no decorator pin (LatentSync muxes via imageio, not
+moviepy) and no transformers pin (it ships its OWN bundled Whisper, so the base's
+4.57 never enters the inference path). Behind `creative-latentsync:9007`, HTTP-called
+by the worker exactly like MuseTalk/Hallo2.
+
+**A "1.6" can be a pure checkpoint swap.** ByteDance's own card: 1.6 is the *same
+code and training strategy* as 1.5, with only the training set upgraded to 512² —
+"load the corresponding checkpoint and modify the resolution parameter." So the
+rebuild was: download the 1.6 `latentsync_unet.pt`, run it on the existing
+`configs/unet/stage2_512.yaml` (already `resolution: 512`), reuse 1.5's whisper-tiny
++ insightface `buffalo_l` (byte-identical, via the repo `checkpoints` symlink), and
+pre-warm `sd-vae-ft-mse` into the shared HF cache so the container resolves it
+offline. No code changes. The melt/seam regression closed completely on both
+portraits that broke 1.5.
+
+**The honest A/B can end in "we kept it, but not because it won."** The plan made
+this the one rebuild allowed to end in *drop it*: MuseTalk already does social-grade
+portraits, so LatentSync 1.6 had to be *visibly sharper on teeth/lips* to justify a
+second portrait engine. Same-portrait, same-audio bake-off result: it **wasn't**.
+Teeth/lip sharpness is roughly a tie — MuseTalk actually articulates more openly —
+and 1.6 costs ~3× the wall-clock (242s vs 78s for 34.5s) and ~2.6× the VRAM (~20GB
+vs 7.7GB; 512² latent diffusion + VAE + DeepCache is heavy, far above the old ~6GB
+estimate). What 1.6 *does* win on is naturalism: cleaner lower-face/beard blending
+with no MuseTalk paste-box seam, and more photographic skin. It was kept as the
+`production` quality tier for that edge (draft stays MuseTalk), and the benchmark
+records the tie plainly rather than overselling it. Lesson: write the kill-criterion
+into the spec *before* the bake-off, then report what you actually see — a clean
+result that ties is still a tie.
+
 ## Meta-lessons
 
 1. **Entry points lie.** Three of five model repos had a different real entry

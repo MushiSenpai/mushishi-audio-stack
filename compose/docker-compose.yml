@@ -171,6 +171,44 @@ services:
               capabilities: [gpu]
     restart: unless-stopped
 
+  # ── LatentSync 1.6 portrait lip-sync (dedicated, pinned, isolated) ──
+  # Second portrait engine (vs MuseTalk): 512x512 latent-diffusion lip-sync whose
+  # reason to exist is teeth/lip fidelity. Separate image (mushishi-latentsync:
+  # diffusers 0.32.2 shadows the base — the silent-drift fix for the 1.5 melted-mouth
+  # corruption) so its env never touches the working YuE+Fish worker. Worker's
+  # lipsync.py latentsync branch calls http://creative-latentsync:9007/lipsync. Holds
+  # NO VRAM while idle (loads per job, frees on exit) — good citizen on the shared
+  # 5090. Needs the HF cache mount for the sd-vae-ft-mse VAE (pre-warmed, offline).
+  # See audio/latentsync-1.6-rebuild-spec.md.
+  latentsync:
+    image: mushishi-latentsync
+    container_name: creative-latentsync
+    runtime: nvidia
+    ports:
+      - "127.0.0.1:9007:9007"    # internal only
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - TORCH_HOME=/data/ai/07-cache/torch
+      - HF_HOME=/data/ai/07-cache/huggingface
+    volumes:
+      - /data/ai/01-workspace/audio/latentsync:/data/ai/01-workspace/audio/latentsync
+      - /data/ai/02-models/audio:/data/ai/02-models/audio:ro
+      - /data/ai/03-data/audio:/data/ai/03-data/audio
+      - /data/ai/08-portfolio/outputs/audio:/data/ai/08-portfolio/outputs/audio
+      - /data/ai/07-cache/torch:/data/ai/07-cache/torch
+      - /data/ai/07-cache/huggingface:/data/ai/07-cache/huggingface
+    working_dir: /data/ai/01-workspace/audio/latentsync
+    command: uvicorn latentsync_server:app --host 0.0.0.0 --port 9007
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
   # ── Lip Sync (multi-tier) ───────────────────────────────────────────
   lipsync:
     image: mushishi-audio-base
