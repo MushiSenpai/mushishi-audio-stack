@@ -67,7 +67,10 @@ LLM-written lyrics, synthetic TTS voice). Hear/see them:
 | [`samples/portrait.png`](samples/portrait.png) | Image — FLUX.2 | synthetic portrait (the avatar input; owned, no real likeness) |
 | [`samples/avatar-musetalk-social.mp4`](samples/avatar-musetalk-social.mp4) | Lip-sync — MuseTalk 1.5 | 34.5s social-grade talking-head, 1024² (synthetic portrait + TTS voice) |
 | [`samples/avatar-hallo2-cinematic.mp4`](samples/avatar-hallo2-cinematic.mp4) | Lip-sync — Hallo2 | 34.5s cinematic talking-head, 512², head pose + expression (synthetic portrait + TTS voice) |
+| [`samples/avatar-hallo2-halfbody.mp4`](samples/avatar-hallo2-halfbody.mp4) | Lip-sync — Hallo2 (half-body) | 6s framing demo, 512², **head + torso + hand gesture** preserved — the non-headshot differentiator vs MuseTalk ([source img](samples/avatar-hallo2-halfbody-source.png), synthetic FLUX.1-dev human + TTS voice). Short demo, not the 34.5s measured run. |
 
 Local lip-sync now ships at **social grade (MuseTalk)** and **cinematic grade (Hallo2)** —
-both clips above are generated on the box from the synthetic portrait. **Broadcast-grade
-close-ups still use a cloud path** (see "Lip-sync status" above).
+all clips above are generated on the box from synthetic inputs. The half-body clip shows
+Hallo2's real reason to exist: it holds a **non-headshot framing** (torso + gesture) where
+MuseTalk is a head crop. **Broadcast-grade close-ups still use a cloud path** (see "Lip-sync
+status" above).
