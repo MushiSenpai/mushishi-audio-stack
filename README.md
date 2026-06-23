@@ -49,6 +49,8 @@ I don't hand-write code. Every script, worker, and compose file in this repo was
 
 ## The avatar pipeline (end-to-end)
 
+<p align="center"><img src="docs/avatar-pipeline.svg" alt="Speaking avatar pipeline: portrait + voice → Demucs → Fish Speech clone → synthesize → a chosen lip-sync tier (MuseTalk draft / LatentSync production / Hallo2 cinematic) → output mp4" width="680"></p>
+
 ```
 portrait.jpg + voice_sample.wav
   → Demucs        (separate speech from background noise/music)

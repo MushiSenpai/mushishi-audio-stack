@@ -1,0 +1,52 @@
+<svg viewBox="0 0 680 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="at ad">
+<title id="at">Speaking avatar pipeline</title>
+<desc id="ad">A portrait and voice sample pass through Demucs and Fish Speech to a cloned, synthesized narration, then a chosen lip-sync tier (MuseTalk draft, LatentSync production, Hallo2 cinematic) produces the output mp4.</desc>
+<rect x="0" y="0" width="680" height="400" rx="14" fill="#0b0e14"/>
+<defs><marker id="g" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#e8a33d"/></marker></defs>
+<g font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <text x="24" y="34" font-size="15" font-weight="500" fill="#e6e1d7">speaking avatar — photo + voice → <tspan fill="#e8a33d">talking video</tspan></text>
+  <rect x="24" y="48" width="632" height="36" rx="10" fill="#1e2430" stroke="#5b6270"/>
+  <text x="340" y="70" font-size="11.5" fill="#8a8f98" text-anchor="middle">audio gateway <tspan fill="#e8a33d">:9000</tspan> · fastapi — intent router → (job_type, tier) · job queue</text>
+  <g fill="none" stroke="#e8a33d" stroke-width="1.6" marker-end="url(#g)">
+    <path d="M174,136 L189,136"/><path d="M328,136 L343,136"/><path d="M496,136 L511,136"/>
+    <path d="M583,164 L583,182 L340,182 L340,202"/>
+  </g>
+  <g text-anchor="middle">
+    <rect x="24" y="108" width="150" height="56" rx="9" fill="#11151f" stroke="#3a4252"/>
+    <text x="99" y="132" font-size="12" font-weight="500" fill="#e6e1d7">portrait + voice</text>
+    <text x="99" y="148" font-size="10" fill="#8a8f98">the two inputs</text>
+    <rect x="190" y="108" width="138" height="56" rx="9" fill="#11151f" stroke="#3a4252"/>
+    <text x="259" y="132" font-size="12" font-weight="500" fill="#e6e1d7">demucs</text>
+    <text x="259" y="148" font-size="10" fill="#8a8f98">separate speech</text>
+    <rect x="344" y="108" width="152" height="56" rx="9" fill="#11151f" stroke="#3a4252"/>
+    <text x="420" y="132" font-size="12" font-weight="500" fill="#e6e1d7">fish speech</text>
+    <text x="420" y="148" font-size="10" fill="#8a8f98">clone voice profile</text>
+    <rect x="511" y="108" width="145" height="56" rx="9" fill="#11151f" stroke="#3a4252"/>
+    <text x="583" y="132" font-size="12" font-weight="500" fill="#e6e1d7">fish speech</text>
+    <text x="583" y="148" font-size="10" fill="#8a8f98">synthesize narration</text>
+  </g>
+  <text x="340" y="198" font-size="12" font-weight="500" fill="#e6e1d7" text-anchor="middle">lip-sync the portrait — choose a tier</text>
+  <g text-anchor="middle">
+    <rect x="40" y="210" width="190" height="76" rx="10" fill="#11151f" stroke="#3a4252"/>
+    <text x="135" y="234" font-size="13"><tspan fill="#e6e1d7" font-weight="500">musetalk</tspan><tspan fill="#e8a33d"> :9005</tspan></text>
+    <text x="135" y="254" font-size="11" fill="#8a8f98">draft</text>
+    <text x="135" y="270" font-size="10" fill="#5b6270">fast · social-grade</text>
+    <rect x="245" y="210" width="190" height="76" rx="10" fill="#11151f" stroke="#e8a33d"/>
+    <text x="340" y="234" font-size="13"><tspan fill="#e6e1d7" font-weight="500">latentsync</tspan><tspan fill="#e8a33d"> :9007</tspan></text>
+    <text x="340" y="254" font-size="11" fill="#e8a33d">production · default</text>
+    <text x="340" y="270" font-size="10" fill="#5b6270">naturalism, clean blend</text>
+    <rect x="450" y="210" width="190" height="76" rx="10" fill="#11151f" stroke="#3a4252"/>
+    <text x="545" y="234" font-size="13"><tspan fill="#e6e1d7" font-weight="500">hallo2</tspan><tspan fill="#e8a33d"> :9006</tspan></text>
+    <text x="545" y="254" font-size="11" fill="#8a8f98">cinematic</text>
+    <text x="545" y="270" font-size="10" fill="#5b6270">highest fidelity</text>
+  </g>
+  <g fill="none" stroke="#e8a33d" stroke-width="1.4" marker-end="url(#g)">
+    <path d="M135,286 L135,304 L322,304"/>
+    <path d="M340,286 L340,310"/>
+    <path d="M545,286 L545,304 L358,304"/>
+  </g>
+  <rect x="290" y="310" width="100" height="34" rx="17" fill="#1e2430" stroke="#e8a33d"/>
+  <text x="340" y="332" font-size="12" font-weight="500" fill="#e6e1d7" text-anchor="middle">output.mp4</text>
+  <text x="24" y="374" font-size="10.5" fill="#8a8f98">one tier loaded at a time (sequential gpu) · default = latentsync; musetalk for speed, hallo2 for cinema.</text>
+</g>
+</svg>
